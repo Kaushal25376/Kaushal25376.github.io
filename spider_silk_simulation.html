@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Spider Silk Pattern Simulation (Bio-inspired)</title>
+  <style>
+    body { display: flex; margin: 0; background: #090c10; color: #dce9f9; font-family: Inter, sans-serif; }
+    canvas { flex: 1; background: #060a0d; margin: 16px; border-radius: 8px; box-shadow: inset 0 0 100px rgba(0,0,0,0.7); }
+    .sidebar { width: 320px; padding: 16px; background: #101720; border-radius: 8px; margin: 16px; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+    h1 { font-size: 18px; margin-top: 0; color: #9ad3ff; }
+    label { display: flex; justify-content: space-between; font-size: 13px; }
+    input[type=range] { width: 100%; }
+    .control { margin: 8px 0; }
+    button { background: #0e2235; border: 1px solid #233c50; border-radius: 6px; color: #9ad3ff; padding: 6px 10px; margin: 4px 2px; cursor: pointer; }
+    button:hover { background: #1c2f44; }
+    .note { font-size: 12px; opacity: 0.8; margin-top: 10px; }
+    #verifyResult { margin-top: 10px; font-size: 13px; color: #bcd8ff; min-height: 20px; }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h1>Spider Silk Simulator</h1>
+
+    <div class="control">
+      <label>Thread density <span id="densityLabel">120</span></label>
+      <input id="density" type="range" min="10" max="500" value="120" />
+    </div>
+    <div class="control">
+      <label>Thread length <span id="lengthLabel">150</span></label>
+      <input id="length" type="range" min="50" max="400" value="150" />
+    </div>
+
+    <div class="control">
+      <label>Thread thickness <span id="thickLabel">1.2</span></label>
+      <input id="thick" type="range" min="0.2" max="5" step="0.1" value="1.2" />
+    </div>
+
+    <div class="control">
+      <label>Curliness <span id="curlLabel">0.3</span></label>
+      <input id="curl" type="range" min="0" max="1" step="0.01" value="0.3" />
+    </div>
+
+    <div class="control">
+      <label>Alignment <span id="alignLabel">0.25</span></label>
+      <input id="align" type="range" min="0" max="1" step="0.01" value="0.25" />
+    </div>
+
+    <div>
+      <button id="generate">Generate Pattern</button>
+      <button id="resimulate">Re-Simulate</button>
+      <button id="verify">Verify # Uniqueness</button>
+    </div>
+
+    <div id="verifyResult"></div>
+
+    <div class="note">Use Generate to create new silk pattern, Re-Simulate to slightly vary it, and Verify to ensure all IDs (#) are unique.</div>
+  </div>
+
+  <canvas id="canvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let W, H, threads = [];
+
+    const controls = ['density','length','thick','curl','align'];
+    const get = id => document.getElementById(id);
+
+    function resize() {
+      W = window.innerWidth - 360;
+      H = window.innerHeight;
+      canvas.width = W; canvas.height = H;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function rand(n=1) { return Math.random()*n; }
+    function noise(v) { return Math.sin(v*12.9898)*43758.5453 % 1; }
+
+    function regen(randomize=false) {
+      threads = [];
+      const density = parseInt(get('density').value);
+      const length = parseInt(get('length').value);
+      const thick = parseFloat(get('thick').value);
+      const curl = parseFloat(get('curl').value);
+      const align = parseFloat(get('align').value);
+      for (let i=0;i<density;i++) {
+        const x = rand(W), y = rand(H);
+        const len = length * (0.5 + rand());
+        const ang = (Math.random()*Math.PI*2) * (1-align) + (Math.PI*0.5)*align;
+        threads.push({x,y,len,ang,thick,curl,id:'#'+(i+1)});
+      }
+      draw();
+      get('verifyResult').textContent = ''; // clear previous results
+    }
+
+    function draw() {
+      ctx.fillStyle = '#050709';
+      ctx.fillRect(0,0,W,H);
+      threads.forEach(t => drawThread(t));
+    }
+
+    function drawThread(t) {
+      ctx.beginPath();
+      ctx.moveTo(t.x, t.y);
+      const segs = 10;
+      for (let i=1;i<=segs;i++) {
+        const u = i/segs;
+        const nx = t.x + Math.cos(t.ang)*t.len*u + Math.sin(t.ang)*Math.sin(u*Math.PI*2)*t.curl*20;
+        const ny = t.y + Math.sin(t.ang)*t.len*u + Math.cos(t.ang)*Math.sin(u*Math.PI*2)*t.curl*20;
+        ctx.lineTo(nx, ny);
+      }
+      ctx.lineWidth = t.thick;
+      ctx.strokeStyle = 'rgba(200,220,255,0.5)';
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(150,200,255,0.7)';
+      ctx.font = '10px monospace';
+      ctx.fillText(t.id, t.x+5, t.y);
+    }
+
+    function verifyUnique() {
+      const ids = threads.map(t => t.id);
+      const unique = new Set(ids);
+      const resultDiv = get('verifyResult');
+      if (unique.size === ids.length) {
+        resultDiv.textContent = '✅ All thread IDs (#) are unique!';
+        resultDiv.style.color = '#90ee90';
+      } else {
+        resultDiv.textContent = '⚠️ Duplicate IDs found. Try regenerating pattern.';
+        resultDiv.style.color = '#ff8080';
+      }
+    }
+
+    get('verify').addEventListener('click', verifyUnique);
+    get('generate').addEventListener('click', () => regen(true));
+    get('resimulate').addEventListener('click', draw);
+
+    controls.forEach(c => get(c).addEventListener('input', regen));
+    regen();
+  </script>
+</body>
+</html>
